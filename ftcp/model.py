@@ -1,9 +1,9 @@
 import tensorflow as tf
-from keras import backend as K
-from keras.layers import Input, Dense, Lambda, Conv1D, Conv2DTranspose, \
+from tensorflow.keras import backend as K
+from tensorflow.keras.layers import Input, Dense, Lambda, Conv1D, Conv2DTranspose, \
     LeakyReLU, Activation, Flatten, Reshape, BatchNormalization
-from keras import layers
-from keras.models import Model
+from tensorflow.keras import layers
+from tensorflow.keras.models import Model
 
 def FTCP(X_train, y_train, coeffs=(2, 10,), semi=False, label_ind=None, prop_dim=None):
     

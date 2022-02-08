@@ -1,28 +1,40 @@
-from data import *
-from model import *
-from utils import *
-from sampling import *
+from ftcp.data import *
+from ftcp.model import *
+from ftcp.utils import *
+from ftcp.sampling import *
 
+import os
 import joblib
 import numpy as np
 import matplotlib.pyplot as plt
+from monty.serialization import dumpfn
 
-from keras import  optimizers
-from keras.callbacks import ReduceLROnPlateau, LearningRateScheduler
+from tensorflow.keras import optimizers
+from tensorflow.keras.callbacks import ReduceLROnPlateau, LearningRateScheduler
 from sklearn import metrics
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
+
+from tensorflow.python.framework.ops import disable_eager_execution
+disable_eager_execution()
 
 # Query ternary and quaternary compounds with number of sites <= 40
 max_elms = 4
 min_elms = 3
 max_sites = 40
 # Use your own API key to query Materials Project (https://materialsproject.org/open)
-mp_api_key = 'YourAPIKey'
-dataframe = data_query(mp_api_key, max_elms, min_elms, max_sites)
+dataframe = fetch_mp_cache()
+mp_api_key = get_secret("mp-api-key")['mp_api_key']
 
 # Obtain FTCP representation
-FTCP_representation, Nsites = FTCP_represent(dataframe, max_elms, max_sites, return_Nsites=True)
+if not os.path.isfile(os.path.join(DATA_DIR, "mp_ftcp.npy")):
+    FTCP_representation, Nsites = FTCP_represent(dataframe, max_elms, max_sites, return_Nsites=True)
+    np.save(os.path.join(DATA_DIR, "mp_ftcp.npy"), FTCP_representation)
+    np.save(os.path.join(DATA_DIR, "mp_nsites.npy"), Nsites)
+else:
+    FTCP_representation = np.load(os.path.join(DATA_DIR, "mp_ftcp.npy"))
+    Nsites = np.load(os.path.join(DATA_DIR, "mp_nsites.npy"))
+    
 # Preprocess FTCP representation to obtain input X
 FTCP_representation = pad(FTCP_representation, 2)
 X, scaler_X = minmax(FTCP_representation)
@@ -32,7 +44,6 @@ prop = ['formation_energy_per_atom', 'band_gap',]
 Y = dataframe[prop].values
 scaler_y = MinMaxScaler()
 Y = scaler_y.fit_transform(Y) 
-
 
 # Get training, and test data; feel free to have a validation set if you need to tune the hyperparameter
 ind_train, ind_test = train_test_split(np.arange(len(Y)), test_size=0.2, random_state=21)
@@ -51,13 +62,13 @@ def scheduler(epoch, lr):
     return lr
 schedule_lr = LearningRateScheduler(scheduler)
 
-VAE.compile(optimizer=optimizers.rmsprop(lr=5e-4), loss=vae_loss)
+VAE.compile(optimizer=optimizers.RMSprop(lr=5e-4), loss=vae_loss, experimental_run_tf_function=False)
 VAE.fit([X_train, y_train], 
         X_train,
         shuffle=True, 
         batch_size=256,
         epochs=200,
-        callbacks=[reduce_lr, schedule_lr],
+        callbacks=[reduce_lr, schedule_lr]
         )
 
 #%% Visualize latent space with two arbitrary dimensions
